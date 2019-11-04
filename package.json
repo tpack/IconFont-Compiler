@@ -1,0 +1,29 @@
+{
+  "name": "iconfont-compiler",
+  "version": "0.0.1",
+  "repository": "https://github.com/TPack/IconFont-Compiler",
+  "description": "Compile .iconfont file to icon fonts(.svg, .ttf, .eot, .woff, .woff2, .css, .html)",
+  "license": "MIT",
+  "author": "xuld <xuld@xuld.net>",
+  "main": "./iconFontCompiler.js",
+  "types": "./iconFontCompiler.d.ts",
+  "engines": {
+    "node": ">=10.12"
+  },
+  "dependencies": {
+    "svg2ttf": "^4.3.0",
+    "svgicons2svgfont": "^9.1.1",
+    "ttf2eot": "^2.0.0",
+    "ttf2woff": "^2.0.1",
+    "tutils": "^1.8.1",
+    "wawoff2": "^1.0.2",
+    "xmldoc": "^1.1.2"
+  },
+  "devDependencies": {
+    "@types/node": "^12.12.5",
+    "typescript": "next"
+  },
+  "scripts": {
+    "prepublishOnly": "tsc iconFontCompiler.ts --module commonjs --target es2018 -d"
+  }
+}

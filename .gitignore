@@ -1,6 +1,8 @@
 # 前端项目
 
 ## 生成文件
+iconFontCompiler.js
+iconFontCompiler.d.ts
 _*/
 dist/
 package-lock.json
