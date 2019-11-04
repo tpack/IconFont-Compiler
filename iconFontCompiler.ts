@@ -21,7 +21,7 @@ import * as xmldoc from "xmldoc"
 export async function compileIconFont(content: string, path: string, formats: ("svg" | "ttf" | "eot" | "woff" | "woff2" | "css" | "html")[] = ["svg", "eot", "ttf", "woff", "woff2", "css", "html"], options?: IconFontOptions, fs = new FileSystem()) {
 	const rootNode = new xmldoc.XmlDocument(content)
 	const attrs = rootNode.attr ?? {}
-	const result: CompleIconFontResult = {
+	const result: CompileIconFontResult = {
 		icons: [],
 		dependencies: [],
 		globDependencies: [],
@@ -68,7 +68,7 @@ export async function compileIconFont(content: string, path: string, formats: ("
  * @param fs 使用的文件系统，用于解析源文件内的相对地址
  */
 export async function compileIconFontFromSources(sources: (string | { path: string, content?: string } & SVGIcon)[], formats: ("svg" | "ttf" | "eot" | "woff" | "woff2" | "css" | "html")[] = ["svg", "eot", "ttf", "woff", "woff2", "css", "html"], options?: IconFontOptions, fs = new FileSystem()) {
-	const result: CompleIconFontResult = {
+	const result: CompileIconFontResult = {
 		icons: [],
 		dependencies: [],
 		globDependencies: [],
@@ -211,7 +211,7 @@ export interface IconFontOptions {
 }
 
 /** 表示生成图标字体的结果 */
-export interface CompleIconFontResult {
+export interface CompileIconFontResult {
 	/** 生成的 .svg 字体图标内容 */
 	svg?: string
 	/** 生成的 .eot 字体图标内容 */
@@ -271,7 +271,7 @@ export interface SVGNode {
 }
 
 /** 处理一个节点 */
-async function processNode(icon: SVGIcon & SVGNode, path: string, result: CompleIconFontResult, fs: FileSystem) {
+async function processNode(icon: SVGIcon & SVGNode, path: string, result: CompileIconFontResult, fs: FileSystem) {
 	if (icon.name === "iconfont") {
 		if (icon.children) {
 			for (const childNode of icon.children) {
@@ -306,7 +306,7 @@ async function processNode(icon: SVGIcon & SVGNode, path: string, result: Comple
 }
 
 /** 处理一个文件 */
-async function processFile(path: string, result: CompleIconFontResult, fs: FileSystem) {
+async function processFile(path: string, result: CompileIconFontResult, fs: FileSystem) {
 	const content = await fs.readText(path)
 	const rootNode = new xmldoc.XmlDocument(content)
 	await processNode(rootNode, path, result, fs)
@@ -337,7 +337,7 @@ function getUniqueUnicode(unicodeStart: number, set: Set<number>) {
 }
 
 /** 生成字体 */
-async function generateIconFont(result: CompleIconFontResult, formats: ("svg" | "ttf" | "eot" | "woff" | "woff2" | "css" | "html")[], options: IconFontOptions) {
+async function generateIconFont(result: CompileIconFontResult, formats: ("svg" | "ttf" | "eot" | "woff" | "woff2" | "css" | "html")[], options: IconFontOptions) {
 	let svg: boolean, eot: boolean, ttf: boolean, woff: boolean, woff2: boolean, css: boolean, html: boolean
 	for (const format of formats) {
 		switch (format) {
