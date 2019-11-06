@@ -24,7 +24,7 @@ export async function compileIconFont(content: string, path: string, formats: ("
 	const attrs = rootNode.attr ?? {}
 	const result: CompileIconFontResult = {
 		icons: [],
-		dependencies: [],
+		dependencies: new Set(),
 		globDependencies: [],
 		iconNames: new Set(),
 		unicodes: new Set(),
@@ -80,7 +80,7 @@ function parseNumber(value: string | undefined) {
 export async function compileIconFontFromSources(sources: (string | { path: string, content?: string } & SVGIcon)[], formats: ("svgFont" | "ttf" | "eot" | "woff" | "woff2" | "js" | "svg" | "css" | "html")[] = ["svgFont", "eot", "ttf", "woff", "woff2", "js", "svg", "css", "html"], options?: IconFontOptions, fs = new FileSystem()) {
 	const result: CompileIconFontResult = {
 		icons: [],
-		dependencies: [],
+		dependencies: new Set(),
 		globDependencies: [],
 		iconNames: new Set(),
 		unicodes: new Set(),
@@ -90,8 +90,8 @@ export async function compileIconFontFromSources(sources: (string | { path: stri
 	for (const source of sources) {
 		if (typeof source === "string") {
 			await processFile(source, result, fs)
-		} else {
-			result.dependencies.push(source.path)
+		} else if (!result.dependencies.has(source.path)) {
+			result.dependencies.add(source.path)
 			const icon = new String(source.content ?? await fs.readText(source.path)) as SVGIcon
 			icon.iconName = getUnique(icon.iconName ?? getName(source.path, false), result.iconNames)
 			icon.className = getUnique(icon.className ?? icon.iconName, result.classNames)
@@ -242,7 +242,7 @@ export interface CompileIconFontResult {
 	/** 生成的图标预览 */
 	html?: string
 	/** 生成时依赖的路径，当路径发生变化后需要重新生成 */
-	dependencies?: string[]
+	dependencies?: Set<string>
 	/** 生成时依赖的通配符，当新建通配符对应的路径后需要重新生成 */
 	globDependencies?: { glob: string, cwd: string }[]
 	/** 统计的所有图标 */
@@ -299,7 +299,7 @@ async function processNode(icon: SVGIcon & SVGNode, path: string, result: Compil
 			icon.iconName = getUnique(icon.attr?.id ?? getName(path, false), result.iconNames)
 			icon.className = getUnique(icon.attr?.class ?? icon.iconName, result.classNames)
 			if (icon.attr != undefined && icon.attr.unicode != undefined) {
-				icon.unicode = getUniqueUnicode(icon.attr.unicode.length > 1 ? parseNumber(icon.attr.unicode) : icon.attr.unicode.codePointAt(0), result.unicodes)
+				icon.unicode = getUniqueUnicode(icon.attr.unicode.startsWith("0x") ? parseNumber(icon.attr.unicode) : icon.attr.unicode.codePointAt(0), result.unicodes)
 			} else {
 				icon.unicode = result.startUnicode = getUniqueUnicode(result.startUnicode, result.unicodes)
 				icon.autoUnicode = true
@@ -314,7 +314,7 @@ async function processNode(icon: SVGIcon & SVGNode, path: string, result: Compil
 			}
 		} else {
 			const fullPath = resolvePath(path, "..", src)
-			result.dependencies.push(fullPath)
+			result.dependencies.add(fullPath)
 			await processFile(fullPath, result, fs)
 		}
 	}
@@ -322,7 +322,10 @@ async function processNode(icon: SVGIcon & SVGNode, path: string, result: Compil
 
 /** 处理一个文件 */
 async function processFile(path: string, result: CompileIconFontResult, fs: FileSystem) {
-	result.dependencies.push(path)
+	if (result.dependencies.has(path)) {
+		return
+	}
+	result.dependencies.add(path)
 	const content = await fs.readText(path)
 	const rootNode = new xmldoc.XmlDocument(content)
 	await processNode(rootNode, path, result, fs)
@@ -342,14 +345,15 @@ function getUnique(content: string, set: Set<string>) {
 	return content
 }
 
-function getUniqueUnicode(unicodeStart: number, set: Set<number>) {
-	if (set.has(unicodeStart)) {
-		while (set.has(unicodeStart)) {
-			unicodeStart++
+function getUniqueUnicode(startUnicode: number, set: Set<number>) {
+	if (isNaN(startUnicode)) startUnicode = 0xea01
+	if (set.has(startUnicode)) {
+		while (set.has(startUnicode)) {
+			startUnicode++
 		}
 	}
-	set.add(unicodeStart)
-	return unicodeStart
+	set.add(startUnicode)
+	return startUnicode
 }
 
 /** 生成字体 */
@@ -386,7 +390,7 @@ async function generateIconFont(result: CompileIconFontResult, formats: ("svgFon
 				break
 		}
 	}
-	if (svg) {
+	if (svgFont) {
 		result.svgFont = await generateSVGFont(result.icons, options)
 	}
 	if (ttf) {
