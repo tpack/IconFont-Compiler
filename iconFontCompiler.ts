@@ -474,7 +474,7 @@ function generateJS(svg: string, options: IconFontOptions) {
 
 /** 生成 CSS 文件 */
 function generateCSS(icons: SVGIcon[], options: IconFontOptions) {
-	const baseName = getName(options.fileName ?? options.fontName ?? "iconfont", false)
+	const baseName = getName(options.fileName ?? options.fontName ?? "icon", false)
 	const classNamePrefix = options.classNamePrefix ?? baseName
 	const hash = options.hash ?? icons.length
 	return `@font-face {
@@ -499,12 +499,12 @@ function generateCSS(icons: SVGIcon[], options: IconFontOptions) {
 	-moz-osx-font-smoothing: grayscale;
 	user-select: none;
 }
-${icons.map(icon => `.${classNamePrefix}-${icon.className}:before { content: "\\${icon.unicode.toString(16)}"; }`).join("\n")}`
+${icons.map(icon => `.${classNamePrefix ? classNamePrefix + "-" : classNamePrefix}${icon.className}:before { content: "\\${icon.unicode.toString(16)}"; }`).join("\n")}`
 }
 
 /** 生成 HTML 文件 */
 function generateHTML(icons: SVGIcon[], options: IconFontOptions) {
-	const baseName = getName(options.fileName ?? options.fontName ?? "iconfont", false)
+	const baseName = getName(options.fileName ?? options.fontName ?? "icon", false)
 	const classNamePrefix = options.classNamePrefix ?? baseName
 	return `<link rel="stylesheet" href="${baseName}.css">
 <div>
@@ -547,7 +547,7 @@ function generateHTML(icons: SVGIcon[], options: IconFontOptions) {
 	</style>
 	<ul class="icon-demo-container">
 		${icons.map(icon => {
-		const className = `${classNamePrefix}-${icon.className}`
+		const className = `${classNamePrefix ? classNamePrefix + "-" : classNamePrefix}${icon.className}`
 		const unicodeChar = String.fromCodePoint(icon.unicode)
 		const htmlEntity = `&#x${icon.unicode.toString(16)};`
 		return `<li onclick='iconDemoCopy(this)' title="点击复制“${encodeHTML(icon.autoUnicode ? className : unicodeChar)}”">
