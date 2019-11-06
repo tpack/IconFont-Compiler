@@ -19,19 +19,40 @@ import * as xmldoc from "xmldoc"
  * @param options 附加选项
  * @param fs 使用的文件系统，用于解析源文件内的相对地址
  */
-export async function compileIconFont(content: string, path: string, formats: ("svgFont" | "ttf" | "eot" | "woff" | "woff2" | "js" | "svg" | "css" | "html")[] = ["svgFont", "eot", "ttf", "woff", "woff2", "js", "svg", "css", "html"], options?: IconFontOptions, fs = new FileSystem()) {
+export async function compileIconFont(content: string, path: string, formats: ("svgFont" | "ttf" | "eot" | "woff" | "woff2" | "js" | "svg" | "css" | "html")[] = ["eot", "ttf", "woff", "woff2", "css", "html"], options?: IconFontOptions, fs = new FileSystem()) {
 	const rootNode = new xmldoc.XmlDocument(content)
 	const attrs = rootNode.attr ?? {}
 	const result: CompileIconFontResult = {
 		icons: [],
-		dependencies: new Set(),
+		dependencies: [],
 		globDependencies: [],
 		iconNames: new Set(),
 		unicodes: new Set(),
 		classNames: new Set(),
 		startUnicode: options?.startUnicode ?? (parseNumber(attrs.startUnicode) ?? 0xea01)
 	}
-	await processNode(rootNode, path, result, fs)
+	if (rootNode.name === "iconfont") {
+		if (rootNode.children) {
+			for (const childNode of rootNode.children) {
+				if (childNode.name === "svg") {
+					const src = childNode.attr?.src
+					if (src === undefined) {
+						processNode(childNode, path, result)
+					} else if (isGlob(src)) {
+						const baseDir = getDir(path)
+						result.globDependencies.push({ glob: src, cwd: baseDir })
+						for (const fullPath of await fs.glob(src, baseDir)) {
+							await processFile(fullPath, result, fs)
+						}
+					} else {
+						await processFile(resolvePath(path, "..", src), result, fs)
+					}
+				}
+			}
+		}
+	} else {
+		processNode(rootNode, path, result)
+	}
 	await generateIconFont(result, formats, {
 		fontName: attrs.fontName ?? getName(path, false),
 		ascent: parseNumber(attrs.ascent),
@@ -77,10 +98,10 @@ function parseNumber(value: string | undefined) {
  * @param options 附加选项
  * @param fs 使用的文件系统，用于解析源文件内的相对地址
  */
-export async function compileIconFontFromSources(sources: (string | { path: string, content?: string } & SVGIcon)[], formats: ("svgFont" | "ttf" | "eot" | "woff" | "woff2" | "js" | "svg" | "css" | "html")[] = ["svgFont", "eot", "ttf", "woff", "woff2", "js", "svg", "css", "html"], options?: IconFontOptions, fs = new FileSystem()) {
+export async function compileIconFontFromSources(sources: (string | { path: string, content?: string } & SVGIcon)[], formats: ("svgFont" | "ttf" | "eot" | "woff" | "woff2" | "js" | "svg" | "css" | "html")[] = ["eot", "ttf", "woff", "woff2", "css", "html"], options?: IconFontOptions, fs = new FileSystem()) {
 	const result: CompileIconFontResult = {
 		icons: [],
-		dependencies: new Set(),
+		dependencies: [],
 		globDependencies: [],
 		iconNames: new Set(),
 		unicodes: new Set(),
@@ -90,8 +111,8 @@ export async function compileIconFontFromSources(sources: (string | { path: stri
 	for (const source of sources) {
 		if (typeof source === "string") {
 			await processFile(source, result, fs)
-		} else if (!result.dependencies.has(source.path)) {
-			result.dependencies.add(source.path)
+		} else {
+			result.dependencies.push(source.path)
 			const icon = new String(source.content ?? await fs.readText(source.path)) as SVGIcon
 			icon.iconName = getUnique(icon.iconName ?? getName(source.path, false), result.iconNames)
 			icon.className = getUnique(icon.className ?? icon.iconName, result.classNames)
@@ -242,7 +263,7 @@ export interface CompileIconFontResult {
 	/** 生成的图标预览 */
 	html?: string
 	/** 生成时依赖的路径，当路径发生变化后需要重新生成 */
-	dependencies?: Set<string>
+	dependencies?: string[]
 	/** 生成时依赖的通配符，当新建通配符对应的路径后需要重新生成 */
 	globDependencies?: { glob: string, cwd: string }[]
 	/** 统计的所有图标 */
@@ -285,50 +306,28 @@ export interface SVGNode {
 	toString(): string
 }
 
-/** 处理一个节点 */
-async function processNode(icon: SVGIcon & SVGNode, path: string, result: CompileIconFontResult, fs: FileSystem) {
-	if (icon.name === "iconfont") {
-		if (icon.children) {
-			for (const childNode of icon.children) {
-				await processNode(childNode, path, result, fs)
-			}
-		}
-	} else if (icon.name === "svg") {
-		const src = icon.attr?.src
-		if (src === undefined) {
-			icon.iconName = getUnique(icon.attr?.id ?? getName(path, false), result.iconNames)
-			icon.className = getUnique(icon.attr?.class ?? icon.iconName, result.classNames)
-			if (icon.attr != undefined && icon.attr.unicode != undefined) {
-				icon.unicode = getUniqueUnicode(icon.attr.unicode.startsWith("0x") ? parseNumber(icon.attr.unicode) : icon.attr.unicode.codePointAt(0), result.unicodes)
-			} else {
-				icon.unicode = result.startUnicode = getUniqueUnicode(result.startUnicode, result.unicodes)
-				icon.autoUnicode = true
-			}
-			icon.title = icon.attr?.title ?? icon.iconName
-			result.icons.push(icon)
-		} else if (isGlob(src)) {
-			const baseDir = getDir(path)
-			result.globDependencies.push({ glob: src, cwd: baseDir })
-			for (const fullPath of await fs.glob(src, baseDir)) {
-				await processFile(fullPath, result, fs)
-			}
-		} else {
-			const fullPath = resolvePath(path, "..", src)
-			result.dependencies.add(fullPath)
-			await processFile(fullPath, result, fs)
-		}
-	}
-}
-
 /** 处理一个文件 */
 async function processFile(path: string, result: CompileIconFontResult, fs: FileSystem) {
-	if (result.dependencies.has(path)) {
-		return
-	}
-	result.dependencies.add(path)
+	result.dependencies.push(path)
 	const content = await fs.readText(path)
 	const rootNode = new xmldoc.XmlDocument(content)
-	await processNode(rootNode, path, result, fs)
+	processNode(rootNode, path, result)
+}
+
+/** 处理一个 SVG 节点 */
+async function processNode(icon: SVGIcon & SVGNode, path: string, result: CompileIconFontResult) {
+	if (icon.name === "svg") {
+		icon.iconName = getUnique(icon.attr?.id ?? getName(path, false), result.iconNames)
+		icon.className = getUnique(icon.attr?.class ?? icon.iconName, result.classNames)
+		if (icon.attr != undefined && icon.attr.unicode != undefined) {
+			icon.unicode = getUniqueUnicode(icon.attr.unicode.startsWith("0x") ? parseNumber(icon.attr.unicode) : icon.attr.unicode.codePointAt(0), result.unicodes)
+		} else {
+			icon.unicode = result.startUnicode = getUniqueUnicode(result.startUnicode, result.unicodes)
+			icon.autoUnicode = true
+		}
+		icon.title = icon.attr?.title ?? icon.iconName
+		result.icons.push(icon)
+	}
 }
 
 function getUnique(content: string, set: Set<string>) {
