@@ -178,7 +178,7 @@ export interface IconFontOptions {
 	round?: number
 	/**
 	 * 字体底线（正数）
-	 * @default 150
+	 * @default 128
 	 */
 	descent?: number
 	/**
@@ -424,7 +424,7 @@ function generateSVGFont(icons: SVGIcon[], options: IconFontOptions) {
 	options.round = options.round ?? 10e12
 	options.centerHorizontally = options.centerHorizontally ?? true
 	options.normalize = options.normalize ?? true
-	options.descent = options.descent ?? 150
+	options.descent = options.descent ?? 128
 	options.log = options.log ?? (() => { })
 	// 修复 SVGIcons2SVGFontStream 中当没有图标时的 BUG
 	if (!icons.length) options.normalize = true
