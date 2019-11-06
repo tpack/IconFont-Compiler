@@ -4,9 +4,10 @@ import * as SVGIcons2SVGFontStream from "svgicons2svgfont"
 import * as ttf2eot from "ttf2eot"
 import * as ttf2woff from "ttf2woff"
 import { FileSystem } from "tutils/fileSystem"
+import { encodeHTML } from "tutils/html"
+import { quoteJSString } from "tutils/js"
 import { isGlob } from "tutils/matcher"
 import { getDir, getName, resolvePath } from "tutils/path"
-import { encodeHTML } from "tutils/html"
 import * as wawoff2 from "wawoff2"
 import * as xmldoc from "xmldoc"
 
@@ -18,7 +19,7 @@ import * as xmldoc from "xmldoc"
  * @param options 附加选项
  * @param fs 使用的文件系统，用于解析源文件内的相对地址
  */
-export async function compileIconFont(content: string, path: string, formats: ("svg" | "ttf" | "eot" | "woff" | "woff2" | "css" | "html")[] = ["svg", "eot", "ttf", "woff", "woff2", "css", "html"], options?: IconFontOptions, fs = new FileSystem()) {
+export async function compileIconFont(content: string, path: string, formats: ("svgFont" | "ttf" | "eot" | "woff" | "woff2" | "js" | "svg" | "css" | "html")[] = ["svgFont", "eot", "ttf", "woff", "woff2", "js", "svg", "css", "html"], options?: IconFontOptions, fs = new FileSystem()) {
 	const rootNode = new xmldoc.XmlDocument(content)
 	const attrs = rootNode.attr ?? {}
 	const result: CompileIconFontResult = {
@@ -50,14 +51,23 @@ export async function compileIconFont(content: string, path: string, formats: ("
 		...options
 	})
 	return result
+}
 
-	function parseBoolean(value: string | undefined) {
-		return value === undefined ? undefined : value !== "false"
-	}
+function parseBoolean(value: string | undefined) {
+	return value === undefined ? undefined : value !== "false"
+}
 
-	function parseNumber(value: string | undefined) {
-		return value !== undefined ? parseFloat(value) : undefined
+function parseNumber(value: string | undefined) {
+	if (value === undefined) {
+		return undefined
 	}
+	if (value.startsWith("0x")) {
+		return parseInt(value.slice(2), 16)
+	}
+	if (value.endsWith("%")) {
+		return parseFloat(value) / 100
+	}
+	return parseFloat(value)
 }
 
 /**
@@ -67,7 +77,7 @@ export async function compileIconFont(content: string, path: string, formats: ("
  * @param options 附加选项
  * @param fs 使用的文件系统，用于解析源文件内的相对地址
  */
-export async function compileIconFontFromSources(sources: (string | { path: string, content?: string } & SVGIcon)[], formats: ("svg" | "ttf" | "eot" | "woff" | "woff2" | "css" | "html")[] = ["svg", "eot", "ttf", "woff", "woff2", "css", "html"], options?: IconFontOptions, fs = new FileSystem()) {
+export async function compileIconFontFromSources(sources: (string | { path: string, content?: string } & SVGIcon)[], formats: ("svgFont" | "ttf" | "eot" | "woff" | "woff2" | "js" | "svg" | "css" | "html")[] = ["svgFont", "eot", "ttf", "woff", "woff2", "js", "svg", "css", "html"], options?: IconFontOptions, fs = new FileSystem()) {
 	const result: CompileIconFontResult = {
 		icons: [],
 		dependencies: [],
@@ -127,16 +137,17 @@ export interface IconFontOptions {
 	fixedWidth?: boolean
 	/**
 	 * 是否垂直居中字体
-	 * @default false
+	 * @default true
 	 */
 	centerHorizontally?: boolean
 	/**
 	 * 是否放大图标使所有图标等高（以最大图标高度为准）
-	 * @default false
+	 * @default true
 	 */
 	normalize?: boolean
 	/**
-	 * 字体高度，默认以最大图标高度为准
+	 * 字体高度
+	 * @default 1024
 	 */
 	fontHeight?: number
 	/**
@@ -145,12 +156,12 @@ export interface IconFontOptions {
 	 */
 	round?: number
 	/**
-	 * 字体最低基准线（负数）
-	 * @default 0
+	 * 字体底线（正数）
+	 * @default 150
 	 */
 	descent?: number
 	/**
-	 * 字体最高基准线
+	 * 字体顶线
 	 * @default this.fontHeight - this.descent
 	 */
 	ascent?: number
@@ -213,7 +224,7 @@ export interface IconFontOptions {
 /** 表示生成图标字体的结果 */
 export interface CompileIconFontResult {
 	/** 生成的 .svg 字体图标内容 */
-	svg?: string
+	svgFont?: string
 	/** 生成的 .eot 字体图标内容 */
 	eot?: Buffer
 	/** 生成的 .ttf 字体图标内容 */
@@ -222,6 +233,10 @@ export interface CompileIconFontResult {
 	woff?: Buffer
 	/** 生成的 .woff2 字体图标内容 */
 	woff2?: Buffer
+	/** 生成的 .svg 雪碧图标脚本 */
+	js?: string
+	/** 生成的 .svg 雪碧图标内容 */
+	svg?: string
 	/** 生成的 .css 字体样式表 */
 	css?: string
 	/** 生成的图标预览 */
@@ -281,10 +296,10 @@ async function processNode(icon: SVGIcon & SVGNode, path: string, result: Compil
 	} else if (icon.name === "svg") {
 		const src = icon.attr?.src
 		if (src === undefined) {
-			icon.iconName = getUnique(icon.attr?.name ?? getName(path, false), result.iconNames)
+			icon.iconName = getUnique(icon.attr?.id ?? getName(path, false), result.iconNames)
 			icon.className = getUnique(icon.attr?.class ?? icon.iconName, result.classNames)
 			if (icon.attr != undefined && icon.attr.unicode != undefined) {
-				icon.unicode = getUniqueUnicode(icon.attr.unicode.codePointAt(0), result.unicodes)
+				icon.unicode = getUniqueUnicode(icon.attr.unicode.length > 1 ? parseNumber(icon.attr.unicode) : icon.attr.unicode.codePointAt(0), result.unicodes)
 			} else {
 				icon.unicode = result.startUnicode = getUniqueUnicode(result.startUnicode, result.unicodes)
 				icon.autoUnicode = true
@@ -307,6 +322,7 @@ async function processNode(icon: SVGIcon & SVGNode, path: string, result: Compil
 
 /** 处理一个文件 */
 async function processFile(path: string, result: CompileIconFontResult, fs: FileSystem) {
+	result.dependencies.push(path)
 	const content = await fs.readText(path)
 	const rootNode = new xmldoc.XmlDocument(content)
 	await processNode(rootNode, path, result, fs)
@@ -337,24 +353,30 @@ function getUniqueUnicode(unicodeStart: number, set: Set<number>) {
 }
 
 /** 生成字体 */
-async function generateIconFont(result: CompileIconFontResult, formats: ("svg" | "ttf" | "eot" | "woff" | "woff2" | "css" | "html")[], options: IconFontOptions) {
-	let svg: boolean, eot: boolean, ttf: boolean, woff: boolean, woff2: boolean, css: boolean, html: boolean
+async function generateIconFont(result: CompileIconFontResult, formats: ("svgFont" | "ttf" | "eot" | "woff" | "woff2" | "js" | "svg" | "css" | "html")[], options: IconFontOptions) {
+	let svgFont: boolean, eot: boolean, ttf: boolean, woff: boolean, woff2: boolean, js: boolean, svg: boolean, css: boolean, html: boolean
 	for (const format of formats) {
 		switch (format) {
-			case "svg":
-				svg = true
+			case "svgFont":
+				svgFont = true
 				break
 			case "ttf":
-				ttf = svg = true
+				ttf = svgFont = true
 				break
 			case "eot":
-				eot = ttf = svg = true
+				eot = ttf = svgFont = true
 				break
 			case "woff":
-				woff = ttf = svg = true
+				woff = ttf = svgFont = true
 				break
 			case "woff2":
-				woff2 = ttf = svg = true
+				woff2 = ttf = svgFont = true
+				break
+			case "js":
+				js = svg = true
+				break
+			case "svg":
+				svg = true
 				break
 			case "css":
 				css = true
@@ -365,10 +387,10 @@ async function generateIconFont(result: CompileIconFontResult, formats: ("svg" |
 		}
 	}
 	if (svg) {
-		result.svg = await generateSVGFont(result.icons, options)
+		result.svgFont = await generateSVGFont(result.icons, options)
 	}
 	if (ttf) {
-		result.ttf = Buffer.from(svg2ttf(result.svg, options.ttf).buffer)
+		result.ttf = Buffer.from(svg2ttf(result.svgFont, options.ttf).buffer)
 	}
 	if (eot) {
 		result.eot = Buffer.from(ttf2eot(result.ttf).buffer)
@@ -378,6 +400,12 @@ async function generateIconFont(result: CompileIconFontResult, formats: ("svg" |
 	}
 	if (woff2) {
 		result.woff2 = Buffer.from(await wawoff2.compress(result.ttf))
+	}
+	if (svg) {
+		result.svg = generateSVGSprite(result.icons, options)
+	}
+	if (js) {
+		result.js = generateJS(result.svg, options)
 	}
 	if (css) {
 		result.css = generateCSS(result.icons, options)
@@ -389,10 +417,11 @@ async function generateIconFont(result: CompileIconFontResult, formats: ("svg" |
 
 /** 生成 SVG 图标 */
 function generateSVGFont(icons: SVGIcon[], options: IconFontOptions) {
-	options.fontHeight = options.fontHeight ?? 1001
+	options.fontHeight = options.fontHeight ?? 1024
 	options.round = options.round ?? 10e12
 	options.centerHorizontally = options.centerHorizontally ?? true
 	options.normalize = options.normalize ?? true
+	options.descent = options.descent ?? 150
 	options.log = options.log ?? (() => { })
 	// 修复 SVGIcons2SVGFontStream 中当没有图标时的 BUG
 	if (!icons.length) options.normalize = true
@@ -418,6 +447,26 @@ function generateSVGFont(icons: SVGIcon[], options: IconFontOptions) {
 		}
 		fontStream.end()
 	})
+}
+
+/** 生成 SVG 雪碧图标 */
+function generateSVGSprite(icons: SVGIcon[], options: IconFontOptions) {
+	let result = `<svg style="position:absolute;width:0;height:0;overflow:hidden" aria-hidden="true">`
+	for (const icon of icons) {
+		const node = Array.isArray((icon as SVGNode).children) ? Object.create(icon) as SVGNode : new xmldoc.XmlDocument(icon.toString()) as SVGNode
+		node.name = "symbol"
+		if (!node.attr.id) {
+			node.attr.id = icon.className
+		}
+		result += "\n" + node.toString()
+	}
+	result += `\n</svg>`
+	return result
+}
+
+/** 生成 JS 文件 */
+function generateJS(svg: string, options: IconFontOptions) {
+	return `!function iconFontInjectSVG(){var b=document.body,d;if(b){d=document.createElement("div");d.innerHTML=${quoteJSString(svg)};while(d.firstChild)b.insertBefore(d.firstChild,b.firstChild)}else setTimeout(iconFontInjectSVG,10)}();`
 }
 
 /** 生成 CSS 文件 */
