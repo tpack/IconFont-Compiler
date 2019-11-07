@@ -568,9 +568,9 @@ function generateHTML(icons: SVGIcon[], options: IconFontOptions) {
 					showTip("请手动复制“" + text + "”", '<span style="color: #d50000">✘</span> ', 4000)
 				}
 			})
-			function copyText(text, callback) {
-				if (navigator.clipboard) {
-					return navigator.clipboard.writeText(text).then(function (){ callback(true) }, function (){ callback(false) })
+			function copyText(text, callback, useCommand) {
+				if (navigator.clipboard && !useCommand) {
+					return navigator.clipboard.writeText(text).then(function (){ callback(true) }, function (){ copyText(text, callback, true) })
 				}
 				var textArea = document.body.appendChild(document.createElement("textarea"))
 				textArea.value = text
