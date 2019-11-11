@@ -260,7 +260,9 @@ export interface CompileIconFontResult {
 	svg?: string
 	/** 生成的 .css 字体样式表 */
 	css?: string
-	/** 生成的图标预览 */
+	/** 生成的图标预览 HTML 页面主体 */
+	htmlBody?: string
+	/** 生成的图标预览 HTML 页面 */
 	html?: string
 	/** 生成时依赖的路径，当路径发生变化后需要重新生成 */
 	dependencies?: string[]
@@ -414,7 +416,8 @@ async function generateIconFont(result: CompileIconFontResult, formats: ("svgFon
 		result.css = generateCSS(result.icons, options)
 	}
 	if (html) {
-		result.html = generateHTML(result.icons, options)
+		result.htmlBody = generateHTMLBody(result.icons, options)
+		result.html = generateHTML(result.htmlBody, options)
 	}
 }
 
@@ -502,8 +505,8 @@ function generateCSS(icons: SVGIcon[], options: IconFontOptions) {
 ${icons.map(icon => `.${classNamePrefix ? classNamePrefix + "-" : classNamePrefix}${icon.className}:before { content: "\\${icon.unicode.toString(16)}"; }`).join("\n")}`
 }
 
-/** 生成 HTML 文件 */
-function generateHTML(icons: SVGIcon[], options: IconFontOptions) {
+/** 生成 HTML 文件主体 */
+function generateHTMLBody(icons: SVGIcon[], options: IconFontOptions) {
 	const baseName = getName(options.fileName ?? options.fontName ?? "icon", false)
 	const classNamePrefix = options.classNamePrefix ?? baseName
 	return `<link rel="stylesheet" href="${baseName}.css">
@@ -610,4 +613,19 @@ function generateHTML(icons: SVGIcon[], options: IconFontOptions) {
 		}
 	</script>
 </div>`
+}
+
+/** 生成 HTML 文件主体 */
+function generateHTML(body: string, options: IconFontOptions) {
+	return `<!DOCTYPE html>
+<html>
+<head>
+	<meta charset="UTF-8">
+	<meta name="viewport" content="width=device-width,initial-scale=1">
+	<title>${options.fontName} - 图标列表</title>
+</head>
+<body>
+	${body}
+</body>
+</html>`
 }
