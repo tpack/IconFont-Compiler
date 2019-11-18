@@ -20,7 +20,7 @@ import * as xmldoc from "xmldoc"
  * @param fs 使用的文件系统，用于解析源文件内的相对地址
  */
 export async function compileIconFont(content: string, path: string, formats: ("svgFont" | "ttf" | "eot" | "woff" | "woff2" | "js" | "svg" | "css" | "html")[] = ["eot", "ttf", "woff", "woff2", "css", "html"], options?: IconFontOptions, fs = new FileSystem()) {
-	const rootNode = new xmldoc.XmlDocument(content)
+	const rootNode = parseXML(content, path)
 	const attrs = rootNode.attr ?? {}
 	const result: CompileIconFontResult = {
 		icons: [],
@@ -72,6 +72,14 @@ export async function compileIconFont(content: string, path: string, formats: ("
 		...options
 	})
 	return result
+}
+
+function parseXML(value: string, path: string) {
+	try {
+		return new xmldoc.XmlDocument(value) as SVGNode
+	} catch (e) {
+		throw new Error(`${e.message}\nFileName: ${path}`)
+	}
 }
 
 function parseBoolean(value: string | undefined) {
@@ -190,7 +198,7 @@ export interface IconFontOptions {
 	 * 字体元数据（比如版权声明）
 	 * @see https://www.w3.org/TR/SVG/struct.html
 	 */
-	metadata?: undefined
+	metadata?: string
 	/**
 	 * 获取每个字体元数据的回调函数
 	 * @param path SVG 文件路径
@@ -312,7 +320,7 @@ export interface SVGNode {
 async function processFile(path: string, result: CompileIconFontResult, fs: FileSystem) {
 	result.dependencies.push(path)
 	const content = await fs.readText(path)
-	const rootNode = new xmldoc.XmlDocument(content)
+	const rootNode = parseXML(content, path)
 	processNode(rootNode, path, result)
 }
 
@@ -517,7 +525,10 @@ function generateHTMLBody(icons: SVGIcon[], options: IconFontOptions) {
 			padding: 0;
 			display: flex;
 			flex-wrap: wrap;
+			color: #314659;
+			font-family: SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", "Segoe UI", Roboto, "Helvetica Neue", Helvetica, "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", monospace;
 			font-weight: normal;
+			font-size: .95em;
 			line-height: 1.5;
 		}
 		.icon-demo-container li {
@@ -529,7 +540,7 @@ function generateHTMLBody(icons: SVGIcon[], options: IconFontOptions) {
 			border: 1px solid transparent;
 			border-radius: 3px;
 			cursor: pointer;
-			word-break: break-all;
+			word-break: break-word;
 		}
 		.icon-demo-container li:hover {
 			border-color: #009b7d;
@@ -544,8 +555,7 @@ function generateHTMLBody(icons: SVGIcon[], options: IconFontOptions) {
 		.icon-demo-container small {
 			display: block;
 			font-size: .8em;
-			font-family: monospace;
-			opacity: .8;
+			color: #999;
 		}
 	</style>
 	<ul class="icon-demo-container">
