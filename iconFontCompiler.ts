@@ -40,7 +40,7 @@ export async function compileIconFont(content: string, path: string, formats: ("
 						processNode(childNode, path, result)
 					} else if (isGlob(src)) {
 						const baseDir = getDir(path)
-						result.globDependencies.push({ glob: src, cwd: baseDir })
+						result.globDependencies.push({ pattern: src, baseDir: baseDir })
 						for (const fullPath of await fs.glob(src, baseDir)) {
 							await processFile(fullPath, result, fs)
 						}
@@ -275,7 +275,7 @@ export interface CompileIconFontResult {
 	/** 生成时依赖的路径，当路径发生变化后需要重新生成 */
 	dependencies?: string[]
 	/** 生成时依赖的通配符，当新建通配符对应的路径后需要重新生成 */
-	globDependencies?: { glob: string, cwd: string }[]
+	globDependencies?: { pattern: string, baseDir: string }[]
 	/** 统计的所有图标 */
 	icons: SVGIcon[]
 	/** 已使用的图标名 */
