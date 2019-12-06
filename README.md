@@ -3,7 +3,7 @@ Compile .iconfont file to icon fonts(.svg, .ttf, .eot, .woff, .woff2, .css, .htm
 
 ## How to use
 
-1. Create a `icon.iconfont` file:
+1. Create an `icon.iconfont` file:
 ```xml
 <?xml version="1.0" encoding="utf-8"?>
 <iconfont fontName="" startUnicode="59907" classNamePrefix="my-icon">
