@@ -41,7 +41,9 @@ export async function compileIconFont(content: string, path: string, formats: ("
 					} else if (isGlob(src)) {
 						const baseDir = getDir(path)
 						result.globDependencies.push({ pattern: src, baseDir: baseDir })
-						for (const fullPath of await fs.glob(src, baseDir)) {
+						const files = await fs.glob(src, baseDir)
+						files.sort()
+						for (const fullPath of files) {
 							await processFile(fullPath, result, fs)
 						}
 					} else {
@@ -628,7 +630,7 @@ function generateHTMLBody(icons: SVGIcon[], options: IconFontOptions) {
 /** 生成 HTML 文件主体 */
 function generateHTML(body: string, options: IconFontOptions) {
 	return `<!DOCTYPE html>
-<html>
+<html lang="zh-cn">
 <head>
 	<meta charset="UTF-8">
 	<meta name="viewport" content="width=device-width,initial-scale=1">
